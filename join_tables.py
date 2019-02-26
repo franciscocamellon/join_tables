@@ -21,10 +21,10 @@
  *                                                                         *
  ***************************************************************************/
 """
-from PyQt5.QtCore import QSettings, QTranslator, qVersion, QCoreApplication, pyqtSlot
+from PyQt5.QtCore import QSettings, QTranslator, qVersion
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QAction, QApplication, QWidget, QPushButton, QMessageBox
-from qgis.core import QgsVectorLayer, QgsVectorLayerJoinInfo, QgsProject
+from PyQt5.QtWidgets import QAction, QWidget
+from qgis.core import QgsVectorLayer, QgsVectorLayerJoinInfo, QgsProject, QgsWkbTypes
 from qgis.utils import *
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -69,6 +69,9 @@ class JoinTable:
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
+        ###
+        self.root = QgsProject.instance().layerTreeRoot()
+        self.layers_tree = self.root.findLayers()
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -181,6 +184,59 @@ class JoinTable:
                 action)
             self.iface.removeToolBarIcon(action)
 
+    def lyrdict(self):
+        g_dict = {}
+        t_dict = {}
+        i = 0
+        for layer_tree in self.layers_tree:
+            layer = layer_tree.layer()
+
+            if layer.type() == 0:
+                layer_type = layer.geometryType()
+                layer_name = layer.name()
+                ids = self.root.findLayerIds()
+
+                if layer_type == QgsWkbTypes.PointGeometry or layer_type == QgsWkbTypes.LineGeometry:
+                    g = layer_name
+                    gids = ids[i]
+                    g_dict[gids] = g_dict.setdefault(gids, g)
+                elif layer_type == 4:
+                    t = layer_name
+                    tids = ids[i]
+                    t_dict[tids] = t_dict.setdefault(tids, t)
+                i += 1
+        return g_dict, t_dict
+
+    def lyrpair(self):
+        g_dict, t_dict = self.lyrdict()
+        d = {}
+        for k, v in g_dict.items():
+            for c, e in t_dict.items():
+                if g_dict[k] == t_dict[c]:
+                    d[k] = d.setdefault(k, c)
+        return d
+
+    def jointables(self):
+        d = self.lyrpair()
+        for k, v in d.items():
+            target = QgsProject.instance().mapLayer(k)
+            layerToJoin = QgsProject.instance().mapLayer(v)
+            fieldToJoin = QgsProject.instance()
+            symb = QgsVectorLayerJoinInfo()
+            symb.setJoinFieldName('id_feature')
+            symb.setTargetFieldName('id')
+            symb.setJoinLayerId(layerToJoin.id())
+            symb.setUsingMemoryCache(True)
+            symb.setEditable(True)
+            symb.setDynamicFormEnabled(True)
+            symb.setUpsertOnEdit(True)
+            symb.setPrefix('')
+            symb.setJoinFieldNamesSubset(
+                ['ocultar', 'legenda', 'tamanhotxt', 'justtxt', 'orient_txt', 'orient_simb', 'offset_txt',
+                 'offset_simb', 'prioridade', 'offset_txt_x', 'offset_txt_y'])
+            symb.setJoinLayer(layerToJoin)
+            target.addJoin(symb)
+
     def run(self):
         """Run method that performs all the real work"""
 
@@ -190,74 +246,15 @@ class JoinTable:
             self.first_start = False
             self.dlg = JoinTableDialog()
 
+        # cut off the dialog????
         # show the dialog
         self.dlg.show()
         # Run the dialog event loop
         result = self.dlg.exec_()
         # See if OK was pressed
         if result:
-            # Do something useful here - delete the line containing pass and
-            # substitute with your code.
-            root = QgsProject.instance().layerTreeRoot()
-            layers_tree = root.findLayers()
-            # makes a function
-            """
-            create two dictionaire, one with spatial layer names
-            and your root.findLayerIds() and other with non-spatial
-            layers and your root.findLayerIds()
-            """
-            p_dict = {}
-            t_dict = {}
-
-            i = 0
-            for layer_tree in layers_tree:
-                layer = layer_tree.layer()
-
-                if layer.type() == 0:
-                    layer_type = layer.geometryType()
-                    layer_name = layer.name()
-                    ids = root.findLayerIds()
-
-                    if layer_type == 0:
-                        p = layer_name
-                        pids = ids[i]
-                        p_dict[pids] = p_dict.setdefault(pids, p)
-                    elif layer_type == 4:
-                        t = layer_name
-                        tids = ids[i]
-                        t_dict[tids] = t_dict.setdefault(tids, t)
-                    i += 1
-
-            # makes a function
-            """
-            creates a dictionaire with the pairs of the spatial and non-spatial root.findLayerIds 
-            from the keys of the other twice
-            """
-            d = {}
-            for k, v in p_dict.items():
-                for c, e in t_dict.items():
-                    if p_dict[k] == t_dict[c]:
-                        d[k] = d.setdefault(k, c)
-
-            """
-            does a loop in the items of the dictionaire above and sets the spatial join
-            attributes
-            """
-            for k, v in d.items():
-                target = QgsProject.instance().mapLayer(k)
-                layerToJoin = QgsProject.instance().mapLayer(v)
-                fieldToJoin = QgsProject.instance()
-                symb = QgsVectorLayerJoinInfo()
-                symb.setJoinFieldName('id_feature')
-                symb.setTargetFieldName('id')
-                symb.setJoinLayerId(layerToJoin.id())
-                symb.setUsingMemoryCache(True)
-                symb.setEditable(True)
-                symb.setDynamicFormEnabled(True)
-                symb.setUpsertOnEdit(True)
-                symb.setPrefix('')
-                symb.setJoinFieldNamesSubset(
-                    ['ocultar', 'legenda', 'tamanhotxt', 'justtxt', 'orient_txt', 'orient_simb', 'offset_txt',
-                     'offset_simb', 'prioridade', 'offset_txt_x', 'offset_txt_y'])
-                symb.setJoinLayer(layerToJoin)
-                target.addJoin(symb)
+            self.jointables()
+            iface.messageBar().pushMessage("Success", "Table joins done!", level=0, duration=3)
+        else:
+            # treat errors and/or exceptions
+            iface.messageBar().pushMessage("Something is wrong!", level=2, duration=3)
