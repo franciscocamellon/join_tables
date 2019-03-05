@@ -23,7 +23,7 @@
 """
 from PyQt5.QtCore import QSettings, QTranslator, qVersion
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import QAction, QWidget
+from PyQt5.QtWidgets import QAction, QWidget, QMenu
 from qgis.core import QgsVectorLayer, QgsVectorLayerJoinInfo, QgsProject, QgsWkbTypes
 from qgis.utils import *
 # Initialize Qt resources from file resources.py
@@ -65,6 +65,12 @@ class JoinTable:
         # Declare instance attributes
         self.actions = []
         self.menu = self.tr(u'&Join Tables')
+        self.toolbar = self.iface.addToolBar(u'&Join Tables')
+        self.toolbar.setObjectName(u'&Join Tables')
+
+        self.dsgTools = None
+        self.menuBar = self.iface.mainWindow().menuBar()
+        # self.provider = DSGToolsProcessingAlgorithmProvider()
 
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
@@ -139,7 +145,7 @@ class JoinTable:
         :rtype: QAction
         """
 
-        icon = QIcon(icon_path)
+        icon = QIcon('E:\_Code\QGIS\join_tables\icons\icon.png')
         action = QAction(icon, text, parent)
         action.triggered.connect(callback)
         action.setEnabled(enabled_flag)
@@ -165,8 +171,23 @@ class JoinTable:
 
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
+        """
+        # Check if the menu exists and get it
+        self.menu = self.iface.mainWindow().findChild(QMenu, '&My tools')
 
-        icon_path = ':/plugins/join_tables/icon.png'
+        # If the menu does not exist, create it!
+        if not self.menu:
+            self.menu = QMenu('&My tools', self.iface.mainWindow().menuBar())
+            self.menu.setObjectName('&My tools')
+            actions = self.iface.mainWindow().menuBar().actions()
+            lastAction = actions[-1]
+            self.iface.mainWindow().menuBar().insertMenu(lastAction, self.menu)
+
+        # Finally, add your action to the menu
+        self.menu.addAction(self.action)
+        """
+
+        icon_path = ':/plugins/join_tables/icons/icon.png'
         self.add_action(
             icon_path,
             text=self.tr(u'Join'),
@@ -175,6 +196,7 @@ class JoinTable:
 
         # will be set False in run()
         self.first_start = True
+
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
@@ -196,7 +218,7 @@ class JoinTable:
                 layer_name = layer.name()
                 ids = self.root.findLayerIds()
 
-                if layer_type == QgsWkbTypes.PointGeometry or layer_type == QgsWkbTypes.LineGeometry:
+                if layer_type == 0 or layer_type == 1:
                     g = layer_name
                     gids = ids[i]
                     g_dict[gids] = g_dict.setdefault(gids, g)
