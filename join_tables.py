@@ -240,23 +240,27 @@ class JoinTable:
     def joinTables(self):
         d, f = self.lyrPair()
         for k, v in d.items():
-            target = QgsProject.instance().mapLayer(k)
-            layerToJoin = QgsProject.instance().mapLayer(v)
-            fieldToJoin = QgsProject.instance()
-            symb = QgsVectorLayerJoinInfo()
-            symb.setJoinFieldName('id_feature')
-            symb.setTargetFieldName('id')
-            symb.setJoinLayerId(layerToJoin.id())
-            symb.setUsingMemoryCache(True)
-            symb.setEditable(True)
-            symb.setDynamicFormEnabled(True)
-            symb.setUpsertOnEdit(True)
-            symb.setPrefix('')
-            symb.setJoinFieldNamesSubset(
-                ['ocultar', 'legenda', 'tamanhotxt', 'justtxt', 'orient_txt', 'orient_simb', 'offset_txt',
-                 'offset_simb', 'prioridade', 'offset_txt_x', 'offset_txt_y'])
-            symb.setJoinLayer(layerToJoin)
-            target.addJoin(symb)
+            if QgsVectorLayerJoinInfo().isEditable() is True:
+                break
+            else:
+                target = QgsProject.instance().mapLayer(k)
+                layerToJoin = QgsProject.instance().mapLayer(v)
+                target.removeJoin(layerToJoin.id())
+                fieldToJoin = QgsProject.instance()
+                symb = QgsVectorLayerJoinInfo()
+                symb.setJoinFieldName('id_feature')
+                symb.setTargetFieldName('id')
+                symb.setJoinLayerId(layerToJoin.id())
+                symb.setUsingMemoryCache(True)
+                symb.setEditable(True)
+                symb.setDynamicFormEnabled(True)
+                symb.setUpsertOnEdit(True)
+                symb.setPrefix('')
+                symb.setJoinFieldNamesSubset(
+                    ['ocultar', 'legenda', 'tamanhotxt', 'justtxt', 'orient_txt', 'orient_simb', 'offset_txt',
+                     'offset_simb', 'prioridade', 'offset_txt_x', 'offset_txt_y'])
+                symb.setJoinLayer(layerToJoin)
+                target.addJoin(symb)
 
     def setFieldsCollection(self):
         fieldsColl = {
@@ -591,7 +595,6 @@ class JoinTable:
         return timesDict
 
     def setCollectionSettings(self):
-        self.joinTables()
         lyrids, lyrnames = self.lyrPair()
         coll = self.setFieldsCollection()
         arial = self.setArialDict()
@@ -659,6 +662,7 @@ class JoinTable:
         # See if OK was pressed
         if result:
             # --must have: existing join verification
+            self.joinTables()
             self.setCollectionSettings()
             iface.messageBar().pushMessage("Success", "All settings done!", level=0, duration=3)
 
