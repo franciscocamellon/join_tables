@@ -26,14 +26,16 @@ import re
 
 from PyQt5.QtCore import QSettings, QTranslator, qVersion
 from PyQt5.QtGui import QIcon, QFont, QColor
-from PyQt5.QtWidgets import QAction, QWidget
+from PyQt5.QtWidgets import QAction, QWidget, QMessageBox
 from qgis.core import QgsVectorLayerJoinInfo, QgsProject, QgsPalLayerSettings, \
     QgsTextFormat, QgsPropertyCollection, QgsUnitTypes, QgsVectorLayerSimpleLabeling, QgsProperty
 from qgis.utils import *
 
 # Initialize Qt resources from file resources.py
+from .resources import *
 # Import the code for the dialog
 from .join_tables_dialog import JoinTableDialog
+
 
 
 class JoinTable:
@@ -73,9 +75,11 @@ class JoinTable:
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
+
         # --variables
         self.root = QgsProject.instance().layerTreeRoot()
         self.layers_tree = self.root.findLayers()
+
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -143,7 +147,7 @@ class JoinTable:
         :rtype: QAction
         """
 
-        icon = QIcon('E:\_Code\QGIS\join_tables\icons\icon.png')
+        icon = QIcon(icon_path)
         action = QAction(icon, text, parent)
         action.triggered.connect(callback)
         action.setEnabled(enabled_flag)
@@ -237,30 +241,48 @@ class JoinTable:
                     f[v] = f.setdefault(v, e)
         return d, f
 
+    def removeJoinTables(self):  # for use in future in test for previous joins
+        d, f = self.lyrPair()
+        for k, v in d.items():
+            target = QgsProject.instance().mapLayer(k)
+            layerToJoin = QgsProject.instance().mapLayer(v)
+            target.removeJoin(layerToJoin.id())
+            target.triggerRepaint()
+
     def joinTables(self):
         d, f = self.lyrPair()
         for k, v in d.items():
-            if QgsVectorLayerJoinInfo().isEditable() is True:
-                break
-            else:
-                target = QgsProject.instance().mapLayer(k)
-                layerToJoin = QgsProject.instance().mapLayer(v)
-                target.removeJoin(layerToJoin.id())
-                fieldToJoin = QgsProject.instance()
-                symb = QgsVectorLayerJoinInfo()
-                symb.setJoinFieldName('id_feature')
-                symb.setTargetFieldName('id')
-                symb.setJoinLayerId(layerToJoin.id())
-                symb.setUsingMemoryCache(True)
-                symb.setEditable(True)
-                symb.setDynamicFormEnabled(True)
-                symb.setUpsertOnEdit(True)
-                symb.setPrefix('')
-                symb.setJoinFieldNamesSubset(
-                    ['ocultar', 'legenda', 'tamanhotxt', 'justtxt', 'orient_txt', 'orient_simb', 'offset_txt',
-                     'offset_simb', 'prioridade', 'offset_txt_x', 'offset_txt_y'])
-                symb.setJoinLayer(layerToJoin)
-                target.addJoin(symb)
+            target = QgsProject.instance().mapLayer(k)
+            layerToJoin = QgsProject.instance().mapLayer(v)
+            """  # tests for previous joined layers - under research
+            i = QgsProject.instance().mapLayers().values()
+            for layer in i:
+                fh_lyr = layer
+                joinsInfo = fh_lyr.vectorJoins()
+                
+                if joinsInfo != 0:
+                    QMessageBox.critical(iface.mainWindow(), "Error",
+                                        "Previously Joins already exists! Please remove joins and try again.")
+                    break  # ask for remove previous joins. use removeJoinTables()
+                else:
+            """
+            # target.removeJoin(layerToJoin.id())
+            fieldToJoin = QgsProject.instance()
+            symb = QgsVectorLayerJoinInfo()
+            symb.setJoinFieldName('id_feature')
+            symb.setTargetFieldName('id')
+            symb.setJoinLayerId(layerToJoin.id())
+            symb.setUsingMemoryCache(True)
+            symb.setEditable(True)
+            symb.setDynamicFormEnabled(True)
+            symb.setUpsertOnEdit(True)
+            symb.setPrefix('')
+            symb.setJoinFieldNamesSubset(['ocultar', 'legenda', 'tamanhotxt', 'justtxt', 'orient_txt', 'orient_simb',
+                                          'offset_txt', 'offset_simb', 'prioridade', 'offset_txt_x', 'offset_txt_y'])
+            symb.setJoinLayer(layerToJoin)
+            target.addJoin(symb)
+            layerToJoin.startEditing()
+            target.triggerRepaint()
 
     def setFieldsCollection(self):
         fieldsColl = {
@@ -639,7 +661,10 @@ class JoinTable:
             lyr_settings.setFormat(txt_format)
             lyr_settings.setDataDefinedProperties(pc)
             lyr_settings.enabled = True
-            lyr_settings.fieldName = "legenda"
+            if names == "rel_ponto_cotado_altimetrico_p":
+                lyr_settings.fieldName = "cota"
+            else:
+                lyr_settings.fieldName = "legenda"
             lyr_settings = QgsVectorLayerSimpleLabeling(lyr_settings)
             lyr.setLabelsEnabled(True)
             lyr.setLabeling(lyr_settings)
@@ -647,25 +672,6 @@ class JoinTable:
 
     def run(self):
         """Run method that performs all the real work"""
-
-        # Create the dialog with elements (after translation) and keep reference
-        # Only create GUI ONCE in callback, so that it will only load when the plugin is started
-        if self.first_start == True:
-            self.first_start = False
-            self.dlg = JoinTableDialog()
-
-        # --cut off the dialog????
-        # show the dialog
-        self.dlg.show()
-        # Run the dialog event loop
-        result = self.dlg.exec_()
-        # See if OK was pressed
-        if result:
-            # --must have: existing join verification
-            self.joinTables()
-            self.setCollectionSettings()
-            iface.messageBar().pushMessage("Success", "All settings done!", level=0, duration=3)
-
-        else:
-            # --treat errors and/or exceptions
-            iface.messageBar().pushMessage("Something is wrong!", level=2, duration=3)
+        self.joinTables()
+        self.setCollectionSettings()
+        iface.messageBar().pushMessage("Success", "All settings done!", level=0, duration=3)
